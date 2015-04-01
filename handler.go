@@ -168,9 +168,13 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case strings.Contains(mime, "pdf"):
+		data, err := processPdf(r.Body, mime, bucket)
 	case strings.Contains(mime, "video"):
+		data, err := processVideo(r.Body, mime, bucket)
 	case strings.Contains(mime, "audio"):
+		data, err := processAudio(r.Body, mime, bucket)
 	case mime == "image/jpeg", mime == "image/png", mime == "image/gif":
+		data, err := processFile(r.Body, mime, bucket)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -269,4 +273,16 @@ func processFile(src io.Reader, mime string, bucket string) (*Uploadable, error)
 
 		return &Uploadable{data, key, length}, nil
 	}
+}
+
+func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	return &Uploadable{}, nil
+}
+
+func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	return &Uploadable{}, nil
+}
+
+func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	return &Uploadable{}, nil
 }
