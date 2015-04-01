@@ -195,12 +195,14 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	r.Body.Close()
 
+	// Upload original file to S3
 	err = storage.PutReader(bucket, data.Key, data.Data, data.Length, r.Header.Get("Content-Type"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Upload preview image to S3
 	if data.PreviewData != nil {
 		err = storage.PutReader(bucket, data.PreviewKey, data.PreviewData, data.PreviewLength, http.DetectContentType(data.PreviewData))
 		if err != nil {
@@ -209,19 +211,19 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Make the file URL
 	uri := r.URL
-
 	if r.URL.Host == "" {
 		uri.Host = hostname
-		if secure {
-			uri.Scheme = "https"
-		} else {
-			uri.Scheme = "http"
-		}
 	}
-
+	if secure {
+		uri.Scheme = "https"
+	} else {
+		uri.Scheme = "http"
+	}
 	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
 
+	// Make the preview URL
 	switch {
 	case data.Key == data.PreviewKey:
 		previewUri := uri
@@ -232,6 +234,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		previewUri.Path = fmt.Sprintf("%s/%s", bucket, data.PreviewKey)
 	}
 
+	// Set the response content
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(UploadResponse{
@@ -239,6 +242,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		Preview: previewUri.String(),
 	})
 
+	// If there are warmup headers, push requests onto the queue
 	for _, v := range r.Header["X-Vip-Warmup"] {
 		job := makeWarmupRequest(previewUri.Path, v)
 		Queue.Push(&job)
