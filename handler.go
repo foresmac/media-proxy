@@ -179,7 +179,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	case strings.Contains(mime, "audio"):
 		data, err := processAudio(r.Body, mime, bucket)
 	case mime == "image/jpeg", mime == "image/png", mime == "image/gif":
-		data, err := processFile(r.Body, mime, bucket)
+		data, err := processImage(r.Body, mime, bucket)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -254,7 +254,7 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "pong")
 }
 
-func processFile(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error) {
 	if mime == "image/jpeg" || mime == "image/jpg" {
 		image, format, err := fetch.GetRotatedImage(src)
 		if err != nil {
