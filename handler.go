@@ -166,6 +166,20 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket_id"]
 	mime := r.Header.Get("Content-Type")
 
+	switch {
+	case strings.Contains(mime, "pdf"):
+	case strings.Contains(mime, "video"):
+	case strings.Contains(mime, "audio"):
+	case mime == "image/jpeg", mime == "image/png", mime == "image/gif":
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Msg: fmt.Sprintf("The filetype %s is not supported.", mime),
+		})
+		return
+	}
+
 	data, err := processFile(r.Body, mime, bucket)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
