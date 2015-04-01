@@ -22,7 +22,8 @@ import (
 )
 
 type UploadResponse struct {
-	Url string `json:"url"`
+	Url     string `json:"url"`
+	Preview string `json:"preview_image"`
 }
 
 type ErrorResponse struct {
@@ -30,9 +31,12 @@ type ErrorResponse struct {
 }
 
 type Uploadable struct {
-	Data   io.Reader
-	Key    string
-	Length int64
+	Data          io.Reader
+	Key           string
+	Length        int64
+	PreviewData   io.Reader
+	PreviewKey    string
+	PreviewLength int64
 }
 
 type WarmupRequest string
@@ -166,6 +170,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket_id"]
 	mime := r.Header.Get("Content-Type")
 
+	// Generate data for specific file types
 	switch {
 	case strings.Contains(mime, "pdf"):
 		data, err := processPdf(r.Body, mime, bucket)
@@ -184,18 +189,24 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := processFile(r.Body, mime, bucket)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	r.Body.Close()
 
-	err = storage.PutReader(bucket, data.Key, data.Data,
-		data.Length, r.Header.Get("Content-Type"))
+	err = storage.PutReader(bucket, data.Key, data.Data, data.Length, r.Header.Get("Content-Type"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if data.PreviewData != nil {
+		err = storage.PutReader(bucket, data.PreviewKey, data.PreviewData, data.PreviewLength, http.DetectContentType(data.PreviewData))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	uri := r.URL
@@ -211,15 +222,25 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
 
-	w.Header().Set("Content-Type", "application/json")
+	switch {
+	case data.Key == data.PreviewKey:
+		previewUri := uri
+	case data.PreviewKey == "":
+		previewUri := url.URL{}
+	default:
+		previewUri := uri
+		previewUri.Path = fmt.Sprintf("%s/%s", bucket, data.PreviewKey)
+	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(UploadResponse{
-		Url: uri.String(),
+		Url:     uri.String(),
+		Preview: previewUri.String(),
 	})
 
 	for _, v := range r.Header["X-Vip-Warmup"] {
-		job := makeWarmupRequest(uri.Path, v)
+		job := makeWarmupRequest(previewUri.Path, v)
 		Queue.Push(&job)
 	}
 }
@@ -250,7 +271,7 @@ func processFile(src io.Reader, mime string, bucket string) (*Uploadable, error)
 		}
 		length := int64(data.Len())
 
-		return &Uploadable{data, key, length}, nil
+		return &Uploadable{data, key, length, nil, key, 0}, nil
 
 	} else {
 		raw, err := ioutil.ReadAll(src)
@@ -271,18 +292,18 @@ func processFile(src io.Reader, mime string, bucket string) (*Uploadable, error)
 
 		data.Seek(0, 0)
 
-		return &Uploadable{data, key, length}, nil
+		return &Uploadable{data, key, length, nil, key, 0}, nil
 	}
 }
 
 func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	return &Uploadable{}, nil
+	return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
 }
 
 func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	return &Uploadable{}, nil
+	return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
 }
 
 func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	return &Uploadable{}, nil
+	return &Uploadable{data, key, length, nil, "", 0}, nil
 }
