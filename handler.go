@@ -92,7 +92,6 @@ func (h verifyAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func fileKey(bucket string, width int, height int) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	key := fmt.Sprintf("%d-%s-%d", seed.Int63(), bucket, time.Now().UnixNano())
-
 	hash := md5.New()
 	io.WriteString(hash, key)
 	return fmt.Sprintf("%x-%dx%d", hash.Sum(nil), width, height)
@@ -301,11 +300,47 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 }
 
 func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	raw, err := ioutil.ReadAll(src)
+	if err != nil {
+		return nil, err
+	}
+
+	data := bytes.NewReader(raw)
+	length := int64(data.Len())
+	key := fileKey(bucket, 0, 0)
+
+	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
+	application := `{"id":"9620a13f","key":"e8a39b5b366fc2e6ee70fb01e7355c34"}`
+	options := `{"outputFormat":"png","printPreview":true}`
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("input", fmt.Sprintf("%s.pdf", key))
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = io.Copy(part, data)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = writer.WriteField("application", application)
+	_ = writer.WriteField("options", options)
+
+	resp, err := http.Post(renderPageUrl, "multipart/form-data", body)
+	if err != nil {
+		return nil, err
+	}
 
 	preview, err := processImage(resp.Body, resp.Header.Get("Content-Type"), bucket)
 	if err != nil {
 		return nil, err
 	}
+
+	resp.Body.Close()
+	data.Seek(0, 0)
+
 	return &Uploadable{data, key, length, preview.Data, preview.Key, preview.Length}, nil
 }
 
