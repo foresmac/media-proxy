@@ -301,7 +301,12 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 }
 
 func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
+
+	preview, err := processImage(resp.Body, resp.Header.Get("Content-Type"), bucket)
+	if err != nil {
+		return nil, err
+	}
+	return &Uploadable{data, key, length, preview.Data, preview.Key, preview.Length}, nil
 }
 
 func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
