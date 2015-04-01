@@ -310,9 +310,11 @@ func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) 
 }
 
 func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	presetId := "1351620000001-000010" // Generic 720p H.264
 	return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
 }
 
 func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+	presetId := "1351620000001-300040" // 128k MP3
 	return &Uploadable{data, key, length, nil, "", 0}, nil
 }
