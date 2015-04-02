@@ -35,6 +35,8 @@ var (
 	origins   []string
 	limit     int64
 	hostname  string
+	pdfId     string
+	pdfKey    string
 	verbose   *bool   = flag.Bool("verbose", false, "verbose logging")
 	httpport  *string = flag.String("httpport", "8080", "target port")
 	secure    bool    = false
@@ -122,7 +124,15 @@ func init() {
 	log.Printf("Max file size is set at %dMB.\n", limit)
 
 	hostname = os.Getenv("URI_HOSTNAME")
-	log.Printf("Hostname is set to \"%s\".\n", hostname)
+	log.Printf("Hostname is set to %s.\n", hostname)
+
+	pdfId = os.Getenv("DATALOGICS_ID")
+	pdfKey = os.Getenv("DATALOGICS_KEY")
+	if pdfId != "" || pdfKey != "" {
+		log.Println("Datalogics API configured for PDF previews.")
+	} else {
+		log.Println("PDF preview generation de-activated.")
+	}
 
 	r := mux.NewRouter()
 	r.Handle("/upload/{bucket_id}", verifyAuth(handleUpload))

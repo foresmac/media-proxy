@@ -309,9 +309,13 @@ func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) 
 	length := int64(data.Len())
 	key := fileKey(bucket, 0, 0)
 
+	if pdfId == "" || pdfKey == "" {
+		return &Uploadable{data, key, length, nil, "", 0}, nil
+	}
+
 	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
-	application := `{"id":"9620a13f","key":"e8a39b5b366fc2e6ee70fb01e7355c34"}`
-	options := `{"outputFormat":"png","printPreview":true}`
+	application := fmt.Sprintf("{\"id\":%s\",\"key\":\"%s\"}", pdfId, pdfKey)
+	options := "{\"outputFormat\":\"png\",\"printPreview\":true}"
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -327,6 +331,10 @@ func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) 
 
 	_ = writer.WriteField("application", application)
 	_ = writer.WriteField("options", options)
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := http.Post(renderPageUrl, "multipart/form-data", body)
 	if err != nil {
