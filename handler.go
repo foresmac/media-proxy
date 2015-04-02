@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -169,16 +170,19 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket_id"]
 	mime := r.Header.Get("Content-Type")
 
+	var data *Uploadable
+	var err error
+
 	// Generate data for specific file types
 	switch {
 	case strings.Contains(mime, "pdf"):
-		data, err := processPdf(r.Body, mime, bucket)
+		data, err = processPdf(r.Body, mime, bucket)
 	case strings.Contains(mime, "video"):
-		data, err := processVideo(r.Body, mime, bucket)
+		data, err = processVideo(r.Body, mime, bucket)
 	case strings.Contains(mime, "audio"):
-		data, err := processAudio(r.Body, mime, bucket)
-	case mime == "image/jpeg", mime == "image/png", mime == "image/gif":
-		data, err := processImage(r.Body, mime, bucket)
+		data, err = processAudio(r.Body, mime, bucket)
+	case mime == "image/jpeg" || mime == "image/png" || mime == "image/gif":
+		data, err = processImage(r.Body, mime, bucket)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -198,12 +202,16 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	err = storage.PutReader(bucket, data.Key, data.Data, data.Length, r.Header.Get("Content-Type"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 
 	// Upload preview image to S3
 	if data.PreviewData != nil {
-		err = storage.PutReader(bucket, data.PreviewKey, data.PreviewData, data.PreviewLength, http.DetectContentType(data.PreviewData))
+		previewBytes, err := ioutil.ReadAll(data.PreviewData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		previewReader := bytes.NewReader(previewBytes)
+		err = storage.PutReader(bucket, data.PreviewKey, previewReader, data.PreviewLength, http.DetectContentType(previewBytes))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -222,14 +230,15 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
 
+	var previewUri *url.URL
 	// Make the preview URL
 	switch {
 	case data.Key == data.PreviewKey:
-		previewUri := uri
+		previewUri = uri
 	case data.PreviewKey == "":
-		previewUri := url.URL{}
+		previewUri = &url.URL{}
 	default:
-		previewUri := uri
+		previewUri = uri
 		previewUri.Path = fmt.Sprintf("%s/%s", bucket, data.PreviewKey)
 	}
 
@@ -353,11 +362,29 @@ func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) 
 }
 
 func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	presetId := "1351620000001-000010" // Generic 720p H.264
-	return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
+	raw, err := ioutil.ReadAll(src)
+	if err != nil {
+		return nil, err
+	}
+
+	data := bytes.NewReader(raw)
+	length := int64(data.Len())
+	key := fileKey(bucket, 0, 0)
+	// presetId := "1351620000001-000010" // Generic 720p H.264
+	// return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
+	return &Uploadable{data, key, length, nil, "", 0}
 }
 
 func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error) {
-	presetId := "1351620000001-300040" // 128k MP3
-	return &Uploadable{data, key, length, nil, "", 0}, nil
+	raw, err := ioutil.ReadAll(src)
+	if err != nil {
+		return nil, err
+	}
+
+	data := bytes.NewReader(raw)
+	length := int64(data.Len())
+	key := fileKey(bucket, 0, 0)
+	// presetId := "1351620000001-300040" // 128k MP3
+	// return &Uploadable{data, key, length, nil, "", 0}, nil
+	return &Uploadable{data, key, length, nil, "", 0}
 }
