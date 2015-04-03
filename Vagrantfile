@@ -7,11 +7,11 @@ echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' | 
 apt-get update
 apt-get install -y bzr mercurial git-core build-essential mongodb-10gen
 
-mkdir -p /gopath/src/github.com/vokalinteractive
-ln -s /vagrant /gopath/src/github.com/vokalinteractive/vip 
+mkdir -p /gopath/src
+ln -s /vagrant /gopath/src/vip
 
-wget -c https://go.googlecode.com/files/go1.2.linux-amd64.tar.gz
-tar -xzvf go1.2.linux-amd64.tar.gz
+wget -c https://storage.googleapis.com/golang/go1.4.2.linux-amd64.tar.gz
+tar -xzvf go1.4.2.linux-amd64.tar.gz
 rm *.tar.gz
 mv go /go
 
