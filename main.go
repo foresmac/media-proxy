@@ -54,6 +54,9 @@ func listenHttp() {
 
 		if os.Getenv("DISABLE_HTTP2") == "" {
 			http2.ConfigureServer(server, nil)
+			log.Println("HTTP/2 support is enabled.")
+		} else {
+			log.Println("HTTP/2 support is disabled.")
 		}
 
 		if err := server.ListenAndServeTLS(CertFilePath, KeyFilePath); err != nil {
