@@ -239,7 +239,7 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 	if mime == "image/jpeg" || mime == "image/jpg" {
 		image, format, err := fetch.GetRotatedImage(src)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if format != "jpeg" {
 			return nil, errors.New("You sent a bad JPEG file.")
@@ -252,11 +252,19 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 		data := new(bytes.Buffer)
 		err = jpeg.Encode(data, image, nil)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		length := int64(data.Len())
 
-		return &Uploadable{data, key, length, nil, key, 0}, nil
+		// Upload original file to S3
+		err = storage.PutReader(bucket, key, data, length, mime)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		uri := fileUri(bucket, key)
+
+		return uri, uri, nil
 
 	} else {
 		raw, err := ioutil.ReadAll(src)
@@ -268,7 +276,7 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 		length := int64(data.Len())
 		image, _, err := image.Decode(data)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		width := image.Bounds().Size().X
@@ -277,7 +285,15 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 
 		data.Seek(0, 0)
 
-		return &Uploadable{data, key, length, nil, key, 0}, nil
+		// Upload original file to S3
+		err = storage.PutReader(bucket, key, data, length, mime)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		uri := fileUri(bucket, key)
+
+		return uri, uri, nil
 	}
 }
 
