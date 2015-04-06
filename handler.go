@@ -98,6 +98,19 @@ func fileKey(bucket string, width int, height int) string {
 	return fmt.Sprintf("%x-%dx%d", hash.Sum(nil), width, height)
 }
 
+func fileUri(bucket, key) *url.URL {
+	uri := new(url.URL)
+	uri.Host = hostname
+	if secure {
+		uri.Scheme = "https"
+	} else {
+		uri.Scheme = "http"
+	}
+	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
+
+	return uri
+}
+
 func makeWarmupRequest(path, query string) WarmupRequest {
 	var port string
 	if secure {
@@ -193,7 +206,11 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+
+		if uri == nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 
 	r.Body.Close()
@@ -264,23 +281,10 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 	}
 }
 
-func generateUri(bucket, key) *url.URL {
-	uri := new(url.URL)
-    uri.Host = hostname
-     if secure {
-        uri.Scheme = "https"
-    } else {
-        uri.Scheme = "http"
-    }
-    uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
-
-    return uri
-}
-
 func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	data := bytes.NewReader(raw)
@@ -288,34 +292,34 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 	key := fileKey(bucket, 0, 0)
 
 	// Upload original file to S3
-    err = storage.PutReader(bucket, key, data, length, mime)
-    if err != nil {
-        nil, nil, err
-    }
+	err = storage.PutReader(bucket, key, data, length, mime)
+	if err != nil {
+		return nil, nil, err
+	}
 
-    uri := generateUri(bucket, key)
+	uri := fileUri(bucket, key)
 
 	if pdfId == "" || pdfKey == "" {
-		return uri, &url.URL, nil
+		return uri, &url.URL{}, nil
 	}
 
 	// Generate a preview PNG file using Datalogics web API
 	// https://api.datalogics-cloud.com/docs#renderpages
 	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
-	form := url.Values {
+	form := url.Values{
 		"application": fmt.Sprintf("{\"id\":+%s\",\"key\":+\"%s\"}", pdfId, pdfKey),
-		"options": "{\"outputFormat\":+\"png\",\"printPreview\":+true}",
-		"inputURL": uri.String(),
+		"options":     "{\"outputFormat\":+\"png\",\"printPreview\":+true}",
+		"inputURL":    uri.String(),
 	}
 
 	resp, err := http.PostForm(renderPageUrl, form)
 	if err != nil {
-		return uri, nil, err
+		return uri, &url.URL{}, err
 	}
 
 	previewUri, _, err := processImage(resp.Body, "image/png", bucket)
 	if err != nil {
-		return uri, nil, err
+		return uri, &url.URL{}, err
 	}
 
 	resp.Body.Close()
@@ -323,7 +327,7 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 	return uri, previewUri, nil
 }
 
-func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+func processVideo(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
 		return nil, err
@@ -332,12 +336,20 @@ func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error
 	data := bytes.NewReader(raw)
 	length := int64(data.Len())
 	key := fileKey(bucket, 0, 0)
+
+	err = storage.PutReader(bucket, key, data, length, mime)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	uri := fileUri(bucket, key)
+
 	// presetId := "1351620000001-000010" // Generic 720p H.264
-	// return &Uploadable{data, key, length, previewData, previewKey, previewLength}, nil
-	return &Uploadable{data, key, length, nil, "", 0}, nil
+
+	return uri, &url.URL{}, nil
 }
 
-func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+func processAudio(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
 		return nil, err
@@ -346,7 +358,15 @@ func processAudio(src io.Reader, mime string, bucket string) (*Uploadable, error
 	data := bytes.NewReader(raw)
 	length := int64(data.Len())
 	key := fileKey(bucket, 0, 0)
+
+	err = storage.PutReader(bucket, key, data, length, mime)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	uri := fileUri(bucket, key)
+
 	// presetId := "1351620000001-300040" // 128k MP3
-	// return &Uploadable{data, key, length, nil, "", 0}, nil
-	return &Uploadable{data, key, length, nil, "", 0}, nil
+
+	return uri, &url.URL{}, nil
 }
