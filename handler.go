@@ -134,6 +134,7 @@ func handleWarmup(w http.ResponseWriter, r *http.Request) {
 func handleImageRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=31536000")
