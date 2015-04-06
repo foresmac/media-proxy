@@ -12,8 +12,8 @@ import (
 	"image/jpeg"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -98,7 +98,7 @@ func fileKey(bucket string, width int, height int) string {
 	return fmt.Sprintf("%x-%dx%d", hash.Sum(nil), width, height)
 }
 
-func fileUri(bucket, key) *url.URL {
+func fileUri(bucket string, key string) *url.URL {
 	uri := new(url.URL)
 	uri.Host = hostname
 	if secure {
@@ -106,7 +106,7 @@ func fileUri(bucket, key) *url.URL {
 	} else {
 		uri.Scheme = "http"
 	}
-	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
+	uri.Path = fmt.Sprintf("%s/%s", bucket, key)
 
 	return uri
 }
@@ -235,14 +235,14 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "pong")
 }
 
-func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+func processImage(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	if mime == "image/jpeg" || mime == "image/jpg" {
 		image, format, err := fetch.GetRotatedImage(src)
 		if err != nil {
 			return nil, nil, err
 		}
 		if format != "jpeg" {
-			return nil, errors.New("You sent a bad JPEG file.")
+			return nil, nil, errors.New("You sent a bad JPEG file.")
 		}
 
 		width := image.Bounds().Size().X
@@ -269,7 +269,7 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 	} else {
 		raw, err := ioutil.ReadAll(src)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		data := bytes.NewReader(raw)
@@ -323,9 +323,9 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 	// https://api.datalogics-cloud.com/docs#renderpages
 	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
 	form := url.Values{
-		"application": fmt.Sprintf("{\"id\":+%s\",\"key\":+\"%s\"}", pdfId, pdfKey),
-		"options":     "{\"outputFormat\":+\"png\",\"printPreview\":+true}",
-		"inputURL":    uri.String(),
+		"application": []string{fmt.Sprintf("{\"id\":+%s\",\"key\":+\"%s\"}", pdfId, pdfKey)},
+		"options":     []string{"{\"outputFormat\":+\"png\",\"printPreview\":+true}"},
+		"inputURL":    []string{uri.String()},
 	}
 
 	resp, err := http.PostForm(renderPageUrl, form)
@@ -346,7 +346,7 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 func processVideo(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	data := bytes.NewReader(raw)
@@ -368,7 +368,7 @@ func processVideo(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 func processAudio(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	data := bytes.NewReader(raw)

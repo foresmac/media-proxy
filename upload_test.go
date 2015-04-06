@@ -31,6 +31,7 @@ func (s *UploadSuite) SetUpTest(c *C) {
 
 func (s *UploadSuite) TestUpload(c *C) {
 	authToken = "lalalatokenlalala"
+	hostname = "localhost:8080"
 
 	recorder := httptest.NewRecorder()
 
@@ -312,30 +313,4 @@ func (s *UploadSuite) TestRespondCorsHeaders(c *C) {
 	m.ServeHTTP(recorder, req)
 	c.Assert(recorder.Code, Equals, http.StatusOK)
 	c.Assert(recorder.HeaderMap.Get("Access-Control-Allow-Origin"), Equals, "*")
-}
-
-//Check Content-Length of JPG File
-func (s *UploadSuite) TestContentLengthJpg(c *C) {
-	f, err := os.Open("./test/exif_test_img.jpg")
-	c.Assert(err, IsNil)
-
-	fstat, err := os.Stat("./test/exif_test_img.jpg")
-	c.Assert(err, IsNil)
-
-	data, err := processImage(f, "image/jpeg", "")
-	c.Assert(err, IsNil)
-	c.Assert(data.Length, Not(Equals), fstat.Size())
-}
-
-//Check Content-Length of PNG File
-func (s *UploadSuite) TestContentLengthPng(c *C) {
-	f, err := os.Open("./test/test_inspiration.png")
-	c.Assert(err, IsNil)
-
-	fstat, err := os.Stat("./test/test_inspiration.png")
-	c.Assert(err, IsNil)
-
-	data, err := processImage(f, "image/png", "")
-	c.Assert(err, IsNil)
-	c.Assert(data.Length, Equals, fstat.Size())
 }
