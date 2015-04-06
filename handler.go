@@ -170,19 +170,19 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket_id"]
 	mime := r.Header.Get("Content-Type")
 
-	var data *Uploadable
+	var uri, previewUri *url.URL
 	var err error
 
-	// Generate data for specific file types
+	// Generate URIs for specific file types
 	switch {
 	case strings.Contains(mime, "pdf"):
-		data, err = processPdf(r.Body, mime, bucket)
+		uri, previewUri, err = processPdf(r.Body, mime, bucket)
 	case strings.Contains(mime, "video"):
-		data, err = processVideo(r.Body, mime, bucket)
+		uri, previewUri, err = processVideo(r.Body, mime, bucket)
 	case strings.Contains(mime, "audio"):
-		data, err = processAudio(r.Body, mime, bucket)
+		uri, previewUri, err = processAudio(r.Body, mime, bucket)
 	case mime == "image/jpeg" || mime == "image/png" || mime == "image/gif":
-		data, err = processImage(r.Body, mime, bucket)
+		uri, previewUri, err = processImage(r.Body, mime, bucket)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -197,50 +197,6 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body.Close()
-
-	// Upload original file to S3
-	err = storage.PutReader(bucket, data.Key, data.Data, data.Length, r.Header.Get("Content-Type"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	// Upload preview image to S3
-	if data.PreviewData != nil {
-		previewBytes, err := ioutil.ReadAll(data.PreviewData)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		previewReader := bytes.NewReader(previewBytes)
-		err = storage.PutReader(bucket, data.PreviewKey, previewReader, data.PreviewLength, http.DetectContentType(previewBytes))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Make the file URL
-	uri := r.URL
-	if r.URL.Host == "" {
-		uri.Host = hostname
-	}
-	if secure {
-		uri.Scheme = "https"
-	} else {
-		uri.Scheme = "http"
-	}
-	uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
-
-	var previewUri *url.URL
-	// Make the preview URL
-	switch {
-	case data.Key == data.PreviewKey:
-		previewUri = uri
-	case data.PreviewKey == "":
-		previewUri = &url.URL{}
-	default:
-		previewUri = uri
-		previewUri.Path = fmt.Sprintf("%s/%s", bucket, data.PreviewKey)
-	}
 
 	// Set the response content
 	w.Header().Set("Content-Type", "application/json")
@@ -308,7 +264,20 @@ func processImage(src io.Reader, mime string, bucket string) (*Uploadable, error
 	}
 }
 
-func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) {
+func generateUri(bucket, key) *url.URL {
+	uri := new(url.URL)
+    uri.Host = hostname
+     if secure {
+        uri.Scheme = "https"
+    } else {
+        uri.Scheme = "http"
+    }
+    uri.Path = fmt.Sprintf("%s/%s", bucket, data.Key)
+
+    return uri
+}
+
+func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
 		return nil, err
@@ -318,47 +287,40 @@ func processPdf(src io.Reader, mime string, bucket string) (*Uploadable, error) 
 	length := int64(data.Len())
 	key := fileKey(bucket, 0, 0)
 
+	// Upload original file to S3
+    err = storage.PutReader(bucket, key, data, length, mime)
+    if err != nil {
+        nil, nil, err
+    }
+
+    uri := generateUri(bucket, key)
+
 	if pdfId == "" || pdfKey == "" {
-		return &Uploadable{data, key, length, nil, "", 0}, nil
+		return uri, &url.URL, nil
 	}
 
+	// Generate a preview PNG file using Datalogics web API
+	// https://api.datalogics-cloud.com/docs#renderpages
 	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
-	application := fmt.Sprintf("{\"id\":%s\",\"key\":\"%s\"}", pdfId, pdfKey)
-	options := "{\"outputFormat\":\"png\",\"printPreview\":true}"
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("input", fmt.Sprintf("%s.pdf", key))
-	if err != nil {
-		return nil, err
+	form := url.Values {
+		"application": fmt.Sprintf("{\"id\":+%s\",\"key\":+\"%s\"}", pdfId, pdfKey),
+		"options": "{\"outputFormat\":+\"png\",\"printPreview\":+true}",
+		"inputURL": uri.String(),
 	}
 
-	_, err = io.Copy(part, data)
+	resp, err := http.PostForm(renderPageUrl, form)
 	if err != nil {
-		return nil, err
+		return uri, nil, err
 	}
 
-	_ = writer.WriteField("application", application)
-	_ = writer.WriteField("options", options)
-	err = writer.Close()
+	previewUri, _, err := processImage(resp.Body, "image/png", bucket)
 	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.Post(renderPageUrl, "multipart/form-data", body)
-	if err != nil {
-		return nil, err
-	}
-
-	preview, err := processImage(resp.Body, resp.Header.Get("Content-Type"), bucket)
-	if err != nil {
-		return nil, err
+		return uri, nil, err
 	}
 
 	resp.Body.Close()
-	data.Seek(0, 0)
 
-	return &Uploadable{data, key, length, preview.Data, preview.Key, preview.Length}, nil
+	return uri, previewUri, nil
 }
 
 func processVideo(src io.Reader, mime string, bucket string) (*Uploadable, error) {
