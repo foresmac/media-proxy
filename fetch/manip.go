@@ -2,11 +2,11 @@ package fetch
 
 import (
 	"bytes"
+	"errors"
 	"image"
+	"image/png"
 	"io"
 	"io/ioutil"
-	"image/png"
-	"errors"
 
 	"github.com/daddye/vips"
 	"github.com/disintegration/imaging"
@@ -76,6 +76,7 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 	options := vips.Options{
 		Width:        c.Width,
 		Crop:         true,
+		Enlarge:      true,
 		Extend:       vips.EXTEND_WHITE,
 		Interpolator: vips.BILINEAR,
 		Gravity:      vips.CENTRE,
@@ -100,7 +101,7 @@ func ResizeGif(src io.Reader, c *CacheContext) (io.Reader, error) {
 		return nil, err
 	}
 	if format != "gif" {
-	    return nil, errors.New("Aborted attempt to resize another type as a gif")
+		return nil, errors.New("Aborted attempt to resize another type as a gif")
 	}
 
 	pngBuf := new(bytes.Buffer)
