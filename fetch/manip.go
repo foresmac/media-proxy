@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"io"
 	"io/ioutil"
+	"math"
 
 	"github.com/daddye/vips"
 	"github.com/disintegration/imaging"
@@ -90,15 +91,10 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 			return nil, err
 		}
 
-		maxWidth := image.Bounds().Size().X
-		maxHeight := image.Bounds().Size().Y
+		minDimension := int(math.Min(float64(image.Bounds().Size().X), float64(image.Bounds().Size().Y)))
 
-		if maxWidth < options.Width {
-			options.Width = maxWidth
-		}
-
-		if maxHeight < options.Width {
-			options.Width = maxHeight
+		if minDimension < options.Width {
+			options.Width = minDimension
 		}
 
 		options.Height = options.Width
