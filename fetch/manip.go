@@ -76,7 +76,6 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 	options := vips.Options{
 		Width:        c.Width,
 		Crop:         true,
-		Enlarge:      true,
 		Extend:       vips.EXTEND_WHITE,
 		Interpolator: vips.BILINEAR,
 		Gravity:      vips.CENTRE,
@@ -84,7 +83,25 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 	}
 
 	if c.Crop {
-		options.Height = c.Width
+		data := bytes.NewReader(raw)
+
+		image, _, err := image.Decode(data)
+		if err != nil {
+			return nil, err
+		}
+
+		maxWidth := image.Bounds().Size().X
+		maxHeight := image.Bounds().Size().Y
+
+		if maxWidth < options.Width {
+			options.Width = maxWidth
+		}
+
+		if maxHeight < options.Width {
+			options.Width = maxHeight
+		}
+
+		options.Height = options.Width
 	}
 
 	res, err := vips.Resize(raw, options)
