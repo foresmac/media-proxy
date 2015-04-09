@@ -16,6 +16,8 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -298,6 +300,35 @@ func processImage(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 	}
 }
 
+func getPdfPreview(src io.Reader) ([]byte, error) {
+	raw, err := ioutil.ReadAll(src)
+	if err != nil {
+		return nil, err
+	}
+
+	pdfFile, err := ioutil.TempFile("", "pdf_")
+	pdfFile.Write(raw)
+	pdfFile.Close()
+
+	previewFile, err := ioutil.TempFile("", "jpg_")
+	previewFile.Close()
+
+	// Generate a preview PNG file using ghostscript
+	// requires `apt-get install ghostscript` on the container
+	_, err = exec.Command("/usr/bin/ghostscript", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=jpeg", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r72x72", "-sOutputFile=" + previewFile.Name(), pdfFile.Name()).Output()
+    if err != nil {
+        return nil, err
+    }
+
+    previewBuf, err := ioutil.ReadFile(previewFile.Name())
+
+    // Though we want to remove these, if it fails, there is no reason to kill the request
+    os.Remove(pdfFile.Name())
+    os.Remove(previewFile.Name())
+
+	return previewBuf, err
+}
+
 func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
 	raw, err := ioutil.ReadAll(src)
 	if err != nil {
@@ -320,26 +351,20 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 		return uri, &url.URL{}, nil
 	}
 
-	// Generate a preview PNG file using Datalogics web API
-	// https://api.datalogics-cloud.com/docs#renderpages
-	renderPageUrl := "https://pdfprocess.datalogics.com/api/actions/render/pages"
-	form := url.Values{
-		"application": []string{fmt.Sprintf("{\"id\":+%s\",\"key\":+\"%s\"}", pdfId, pdfKey)},
-		"options":     []string{"{\"outputFormat\":+\"png\",\"printPreview\":+true}"},
-		"inputURL":    []string{uri.String()},
+	previewRaw, err := getPdfPreview(src)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	resp, err := http.PostForm(renderPageUrl, form)
+	previewBuf := bytes.NewReader(previewRaw)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	previewUri, _, err := processImage(previewBuf, "image/jpg", bucket)
 	if err != nil {
 		return uri, &url.URL{}, err
 	}
-
-	previewUri, _, err := processImage(resp.Body, "image/png", bucket)
-	if err != nil {
-		return uri, &url.URL{}, err
-	}
-
-	resp.Body.Close()
 
 	return uri, previewUri, nil
 }

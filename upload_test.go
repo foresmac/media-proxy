@@ -77,12 +77,12 @@ func (s *UploadSuite) TestUploadPdf(c *C) {
 	// correctly
 	m := mux.NewRouter()
 	m.Handle("/upload/{bucket_id}", verifyAuth(handleUpload))
-	f, err := os.Open("./test/trunq _sprint_7-1.pdf")
+	f, err := os.Open("./test/trunq_sprint_7-1.pdf")
 	c.Assert(err, IsNil)
 
 	req, err := http.NewRequest("POST", "http://localhost:8080/upload/samplebucket", f)
 	c.Assert(err, IsNil)
-	fstat, err := os.Stat("./test/trunq _sprint_7-1.pdf")
+	fstat, err := os.Stat("./test/trunq_sprint_7-1.pdf")
 	c.Assert(err, IsNil)
 	req.ContentLength = fstat.Size()
 	req.Header.Set("Content-Type", "application/pdf")

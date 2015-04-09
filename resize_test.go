@@ -329,3 +329,21 @@ func (s *ResizeSuite) TestResizeCropColdCache(c *C) {
 		c.Assert(img.Bounds().Size().X <= height, Equals, true)
 	}
 }
+
+func (s *ResizeSuite) TestPreviewPdf(c *C) {
+	file, err := ioutil.ReadFile("test/trunq_sprint_7-1.pdf")
+	c.Assert(err, IsNil)
+
+	buf := bytes.NewReader(file)
+
+	preview, err := getPdfPreview(buf)
+	c.Check(err, IsNil)
+
+	previewBuf := bytes.NewReader(preview)
+
+	image, _, err := image.Decode(previewBuf)
+	c.Check(err, IsNil)
+	c.Check(image.Bounds().Size().X, Equals, 792)
+	c.Check(image.Bounds().Size().Y, Equals, 612)
+}
+
