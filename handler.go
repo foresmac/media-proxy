@@ -347,7 +347,8 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 
 	uri := fileUri(bucket, key)
 
-	previewRaw, err := getPdfPreview(src)
+	data.Seek(0, 0)
+	previewRaw, err := getPdfPreview(data)
 	if err != nil {
 		return uri, &url.URL{}, err
 	}

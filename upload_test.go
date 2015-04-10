@@ -96,7 +96,7 @@ func (s *UploadSuite) TestUploadPdf(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(u.Url), Not(Equals), 0)
 	c.Assert(u.Url, Not(Equals), u.Preview)
-	c.Assert(u.Preview, Equals, "")
+	c.Assert(u.Preview, Not(Equals), "")
 }
 
 func (s *UploadSuite) TestUploadVideo(c *C) {
