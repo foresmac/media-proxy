@@ -1,9 +1,19 @@
 FROM ubuntu:trusty
 MAINTAINER Scott Ferguson <scott.ferguson@vokalinteractive.com>
 
-RUN apt-get update
-RUN apt-get install -y ca-certificates libvips37 libxml2-dev \
-    && apt-get -y install automake build-essential git gobject-introspection libglib2.0-dev libjpeg-turbo8-dev libpng12-dev gtk-doc-tools ghostscript \
+RUN apt-get update && apt-get install -y \
+    automake \
+    build-essential \
+    ca-certificates \
+    ghostscript \
+    git \
+    gobject-introspection \
+    gtk-doc-tools \
+    libglib2.0-dev \
+    libjpeg-turbo8-dev \
+    libpng12-dev \
+    libvips37 \
+    libxml2-dev \
     && git clone https://github.com/jcupitt/libvips.git \
     && cd libvips \
     && ./bootstrap.sh \
@@ -11,6 +21,7 @@ RUN apt-get install -y ca-certificates libvips37 libxml2-dev \
     && make \
     && make install \
     && ldconfig
+
 RUN mkdir /etc/vip
 
 ADD ./vip ./vip
