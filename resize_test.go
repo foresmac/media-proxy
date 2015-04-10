@@ -331,12 +331,10 @@ func (s *ResizeSuite) TestResizeCropColdCache(c *C) {
 }
 
 func (s *ResizeSuite) TestPreviewPdf(c *C) {
-	file, err := ioutil.ReadFile("test/trunq_sprint_7-1.pdf")
+	raw, err := ioutil.ReadFile("test/trunq_sprint_7-1.pdf")
 	c.Assert(err, IsNil)
 
-	buf := bytes.NewReader(file)
-
-	preview, err := getPdfPreview(buf)
+	preview, err := getPdfPreview(raw)
 	c.Check(err, IsNil)
 
 	previewBuf := bytes.NewReader(preview)
