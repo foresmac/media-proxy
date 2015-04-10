@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"io"
 	"io/ioutil"
+	"math"
 
 	"github.com/daddye/vips"
 	"github.com/disintegration/imaging"
@@ -76,7 +77,6 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 	options := vips.Options{
 		Width:        c.Width,
 		Crop:         true,
-		Enlarge:      true,
 		Extend:       vips.EXTEND_WHITE,
 		Interpolator: vips.BILINEAR,
 		Gravity:      vips.CENTRE,
@@ -84,7 +84,20 @@ func Resize(src io.Reader, c *CacheContext) (io.Reader, error) {
 	}
 
 	if c.Crop {
-		options.Height = c.Width
+		data := bytes.NewReader(raw)
+
+		image, _, err := image.Decode(data)
+		if err != nil {
+			return nil, err
+		}
+
+		minDimension := int(math.Min(float64(image.Bounds().Size().X), float64(image.Bounds().Size().Y)))
+
+		if minDimension < options.Width {
+			options.Width = minDimension
+		}
+
+		options.Height = options.Width
 	}
 
 	res, err := vips.Resize(raw, options)
