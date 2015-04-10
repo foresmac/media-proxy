@@ -315,16 +315,16 @@ func getPdfPreview(src io.Reader) ([]byte, error) {
 
 	// Generate a preview PNG file using ghostscript
 	// requires `apt-get install ghostscript` on the container
-	_, err = exec.Command("/usr/bin/ghostscript", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=png16m", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r150x150", "-sOutputFile=" + previewFile.Name(), pdfFile.Name()).Output()
-    if err != nil {
-        return nil, err
-    }
+	_, err = exec.Command("gs", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=png16m", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r150x150", "-sOutputFile="+previewFile.Name(), pdfFile.Name()).Output()
+	if err != nil {
+		return nil, err
+	}
 
-    previewBuf, err := ioutil.ReadFile(previewFile.Name())
+	previewBuf, err := ioutil.ReadFile(previewFile.Name())
 
-    // Though we want to remove these, if it fails, there is no reason to kill the request
-    os.Remove(pdfFile.Name())
-    os.Remove(previewFile.Name())
+	// Though we want to remove these, if it fails, there is no reason to kill the request
+	os.Remove(pdfFile.Name())
+	os.Remove(previewFile.Name())
 
 	return previewBuf, err
 }
@@ -346,10 +346,6 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 	}
 
 	uri := fileUri(bucket, key)
-
-	if pdfId == "" || pdfKey == "" {
-		return uri, &url.URL{}, nil
-	}
 
 	previewRaw, err := getPdfPreview(src)
 	if err != nil {
