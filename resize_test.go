@@ -343,7 +343,7 @@ func (s *ResizeSuite) TestPreviewPdf(c *C) {
 
 	image, _, err := image.Decode(previewBuf)
 	c.Check(err, IsNil)
-	c.Check(image.Bounds().Size().X, Equals, 792)
-	c.Check(image.Bounds().Size().Y, Equals, 612)
+	c.Check(image.Bounds().Size().X, Equals, 1650)
+	c.Check(image.Bounds().Size().Y, Equals, 1275)
 }
 

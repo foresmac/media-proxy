@@ -310,12 +310,12 @@ func getPdfPreview(src io.Reader) ([]byte, error) {
 	pdfFile.Write(raw)
 	pdfFile.Close()
 
-	previewFile, err := ioutil.TempFile("", "jpg_")
+	previewFile, err := ioutil.TempFile("", "png_")
 	previewFile.Close()
 
 	// Generate a preview PNG file using ghostscript
 	// requires `apt-get install ghostscript` on the container
-	_, err = exec.Command("/usr/bin/ghostscript", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=jpeg", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r72x72", "-sOutputFile=" + previewFile.Name(), pdfFile.Name()).Output()
+	_, err = exec.Command("/usr/bin/ghostscript", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=png16m", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r150x150", "-sOutputFile=" + previewFile.Name(), pdfFile.Name()).Output()
     if err != nil {
         return nil, err
     }
@@ -361,7 +361,7 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 		return uri, &url.URL{}, err
 	}
 
-	previewUri, _, err := processImage(previewBuf, "image/jpg", bucket)
+	previewUri, _, err := processImage(previewBuf, "image/png", bucket)
 	if err != nil {
 		return uri, &url.URL{}, err
 	}
