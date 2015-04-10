@@ -300,7 +300,12 @@ func processImage(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 	}
 }
 
-func getPdfPreview(raw []byte) ([]byte, error) {
+func getPdfPreview(src io.Reader) ([]byte, error) {
+	raw, err := ioutil.ReadAll(src)
+	if err != nil {
+		return nil, err
+	}
+
 	pdfFile, err := ioutil.TempFile("", "pdf_")
 	pdfFile.Write(raw)
 	pdfFile.Close()
@@ -342,7 +347,8 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 
 	uri := fileUri(bucket, key)
 
-	previewRaw, err := getPdfPreview(raw)
+	data.Seek(0, 0)
+	previewRaw, err := getPdfPreview(data)
 	if err != nil {
 		return uri, &url.URL{}, err
 	}
