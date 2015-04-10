@@ -353,12 +353,12 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 
 	previewRaw, err := getPdfPreview(src)
 	if err != nil {
-		return nil, nil, err
+		return uri, &url.URL{}, err
 	}
 
 	previewBuf := bytes.NewReader(previewRaw)
 	if err != nil {
-		return nil, nil, err
+		return uri, &url.URL{}, err
 	}
 
 	previewUri, _, err := processImage(previewBuf, "image/jpg", bucket)
