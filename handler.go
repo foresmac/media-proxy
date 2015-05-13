@@ -326,6 +326,10 @@ func getPdfPreview(src io.Reader) ([]byte, error) {
 	os.Remove(pdfFile.Name())
 	os.Remove(previewFile.Name())
 
+	if err != nil {
+		return nil, err
+	}
+
 	return previewBuf, err
 }
 
