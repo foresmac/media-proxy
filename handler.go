@@ -315,7 +315,7 @@ func getPdfPreview(src io.Reader) ([]byte, error) {
 
 	// Generate a preview PNG file using ghostscript
 	// requires `apt-get install ghostscript` on the container
-	_, err = exec.Command("gs", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=png16m", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r150x150", "-sOutputFile="+previewFile.Name(), pdfFile.Name()).Output()
+	err = exec.Command("gs", "-q", "-dQUIET", "-dPARANOIDSAFER", "-dBATCH", "-dNOPAUSE", "-dNOPROMPT", "-dMaxBitmap=500000000", "-dJPEGQ=85", "-dFirstPage=1", "-dLastPage=1", "-dAlignToPixels=0", "-dGridFitTT=0", "-sDEVICE=png16m", "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4", "-r150x150", "-sOutputFile="+previewFile.Name(), pdfFile.Name()).Run()
 	if err != nil {
 		return nil, err
 	}
