@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/elastictranscoder"
 	"github.com/golang/groupcache"
 	"github.com/gorilla/mux"
 	"image"
@@ -92,12 +94,21 @@ func (h verifyAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h(w, r)
 }
 
-func fileKey(bucket string, width int, height int) string {
+func fileKey(bucket string, width int, height int, ext string) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	key := fmt.Sprintf("%d-%s-%d", seed.Int63(), bucket, time.Now().UnixNano())
 	hash := md5.New()
 	io.WriteString(hash, key)
-	return fmt.Sprintf("%x-%dx%d", hash.Sum(nil), width, height)
+
+	switch {
+	case width > 0 && height > 0 && ext != "":
+		return fmt.Sprintf("%x-%dx%d.%s", hash.Sum(nil), width, height, ext)
+	case (width == 0 || height == 0) && ext != "":
+		return fmt.Sprintf("%x.%s", hash.Sum(nil), ext)
+	default:
+		return fmt.Sprintf("%x", hash.Sum(nil))
+	}
+
 }
 
 func fileUri(bucket string, key string) *url.URL {
@@ -250,7 +261,7 @@ func processImage(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 
 		width := image.Bounds().Size().X
 		height := image.Bounds().Size().Y
-		key := fileKey(bucket, width, height)
+		key := fileKey(bucket, width, height, "jpg")
 
 		data := new(bytes.Buffer)
 		err = jpeg.Encode(data, image, nil)
@@ -277,14 +288,14 @@ func processImage(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 
 		data := bytes.NewReader(raw)
 		length := int64(data.Len())
-		image, _, err := image.Decode(data)
+		image, format, err := image.Decode(data)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		width := image.Bounds().Size().X
 		height := image.Bounds().Size().Y
-		key := fileKey(bucket, width, height)
+		key := fileKey(bucket, width, height, format)
 
 		data.Seek(0, 0)
 
@@ -341,7 +352,7 @@ func processPdf(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, 
 
 	data := bytes.NewReader(raw)
 	length := int64(data.Len())
-	key := fileKey(bucket, 0, 0)
+	key := fileKey(bucket, 0, 0, "pdf")
 
 	// Upload original file to S3
 	err = storage.PutReader(bucket, key, data, length, mime)
@@ -378,18 +389,44 @@ func processVideo(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 
 	data := bytes.NewReader(raw)
 	length := int64(data.Len())
-	key := fileKey(bucket, 0, 0)
+	key := fileKey(bucket, 0, 0, "")
 
-	err = storage.PutReader(bucket, key, data, length, mime)
+	video_bucket := "trunq-video-uploads"
+
+	err = storage.PutReader(video_bucket, key, data, length, mime)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	uri := fileUri(bucket, key)
+	orig_uri := fileUri(bucket, key)
 
-	// presetId := "1351620000001-000010" // Generic 720p H.264
+	svc := elastictranscoder.New(nil) // Use DefaultConfig
+	params := &elastictranscoder.CreateJobInput{
+		Input: &elastictranscoder.JobInput{
+			AspectRatio: aws.String("auto"),
+			Container:   aws.String("auto"),
+			FrameRate:   aws.String("auto"),
+			Interlaced:  aws.String("auto"),
+			Key:         aws.String(key),
+			Resolution:  aws.String("auto"),
+		},
+		PipelineID: aws.String("1427912207362-9tmupe"), // Set pipeline ids via ENV?
+		Output: &elastictranscoder.CreateJobOutput{
+			Key:              aws.String(key + ".mp4"),
+			PresetID:         aws.String("1433884957052-6rh021"), // Trunq 720p H.264
+			Rotate:           aws.String("auto"),
+			ThumbnailPattern: aws.String(key + "{count}-{resolution}"), // Can we add res later?
+		},
+	}
+	_, err = svc.CreateJob(params)
 
-	return uri, &url.URL{}, nil
+	if err != nil {
+		return orig_uri, &url.URL{}, err
+	}
+
+	uri := fileUri(bucket, key+".mp4")
+	previewUri := fileUri(bucket, key+"00001-1280x720.jpg") // Assume 1280x720 because preset ensures it
+	return uri, previewUri, nil
 }
 
 func processAudio(src io.Reader, mime string, bucket string) (*url.URL, *url.URL, error) {
@@ -400,16 +437,39 @@ func processAudio(src io.Reader, mime string, bucket string) (*url.URL, *url.URL
 
 	data := bytes.NewReader(raw)
 	length := int64(data.Len())
-	key := fileKey(bucket, 0, 0)
+	key := fileKey(bucket, 0, 0, "")
 
-	err = storage.PutReader(bucket, key, data, length, mime)
+	audio_bucket := "trunq-audio-uploads"
+
+	err = storage.PutReader(audio_bucket, key, data, length, mime)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	uri := fileUri(bucket, key)
+	orig_uri := fileUri(bucket, key)
 
-	// presetId := "1351620000001-300040" // 128k MP3
+	svc := elastictranscoder.New(nil) // Use DefaultConfig
+	params := &elastictranscoder.CreateJobInput{
+		Input: &elastictranscoder.JobInput{
+			AspectRatio: aws.String("auto"),
+			Container:   aws.String("auto"),
+			FrameRate:   aws.String("auto"),
+			Interlaced:  aws.String("auto"),
+			Key:         aws.String(key),
+			Resolution:  aws.String("auto"),
+		},
+		PipelineID: aws.String("1427912254873-1sf1w9"), // Set pipeline ids via ENV?
+		Output: &elastictranscoder.CreateJobOutput{
+			Key:      aws.String(key + ".mp3"),
+			PresetID: aws.String("1351620000001-300040"), // 128k MP3
+		},
+	}
+	_, err = svc.CreateJob(params)
 
+	if err != nil {
+		return orig_uri, &url.URL{}, err
+	}
+
+	uri := fileUri(bucket, key+".mp3")
 	return uri, &url.URL{}, nil
 }
